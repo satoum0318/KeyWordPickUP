@@ -8,10 +8,14 @@ from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 import re
 
-def extract_text_from_pdf(pdf_path):
+def extract_text_from_pdf(pdf_path, page_limit=None):
     text = ''
     with pdfplumber.open(pdf_path) as pdf:
-        pages = pdf.pages[:2]  # 最初の2ページを取得
+        if page_limit is None or page_limit > len(pdf.pages):
+            pages = pdf.pages  # 全ページを解析
+        else:
+            pages = pdf.pages[:page_limit]  # 最初のpage_limitページを解析
+
         for page in pages:
             page_text = page.extract_text() if page.extract_text() else ''
             text += page_text + ' '  # ページ間でテキストを区切るためにスペースを追加
@@ -56,21 +60,22 @@ def analyze_text(text, min_gram):
     keywords = custom_tokenizer(text, min_gram)
     return Counter(keywords)
 
-def analyze_pdfs_in_folder(folder_path, min_gram):
+def analyze_pdfs_in_folder(folder_path, min_gram, page_limit=None):
     files = [f for f in os.listdir(folder_path) if f.endswith('.pdf')]
     keyword_frequency = Counter()
     for filename in files:
         pdf_path = os.path.join(folder_path, filename)
-        text = extract_text_from_pdf(pdf_path)
-        file_keywords = analyze_text(text, min_gram)  # min_gramを渡す
+        text = extract_text_from_pdf(pdf_path, page_limit)
+        file_keywords = analyze_text(text, min_gram)
         keyword_frequency.update(file_keywords)
     return keyword_frequency
 
 def load_folder():
     folder_path = filedialog.askdirectory()
     if folder_path:
-        min_gram = int(gram_spinbox.get())  # スピンボックスから最小グラム数を取得
-        keywords = analyze_pdfs_in_folder(folder_path, min_gram)  # 最小グラム数を引数として渡す
+        min_gram = int(gram_spinbox.get())
+        page_limit = int(page_limit_spinbox.get()) if page_limit_check.get() else None
+        keywords = analyze_pdfs_in_folder(folder_path, min_gram, page_limit)
         most_common_keywords = keywords.most_common(10)
         result_text = "Most common keywords:\n"
         for keyword, frequency in most_common_keywords:
@@ -79,13 +84,13 @@ def load_folder():
         text_area.delete(1.0, tk.END)
         text_area.insert(tk.END, result_text)
         text_area.config(state=tk.DISABLED)
-        progress_var.set(0)  # Reset the progress bar after completion
+        progress_var.set(0)
 
 # 一文字のアルファベットとスペースのみで構成されるキーワードを除外する関数
 def filter_keywords(keywords):
     filtered_keywords = Counter()
     for keyword, count in keywords.items():
-        # アルファベットとスペースのみで構成されているかチェック
+        # アルファベットとスペースのみで構成されているかチェックzxc
         if not re.match(r'^([A-Za-z]\s)+[A-Za-z]?$', keyword):
             filtered_keywords[keyword] = count
     return filtered_keywords
@@ -100,8 +105,18 @@ frame.pack(pady=20)
 # グラム数の設定用スピンボックス
 gram_label = tk.Label(frame, text="グラム数:")
 gram_label.pack(side=tk.LEFT)
-gram_spinbox = tk.Spinbox(frame, from_=1, to=10, width=5)
+gram_spinbox = tk.Spinbox(frame, from_=1, to=10, width=5, value=3)  # 初期値を3に設定
 gram_spinbox.pack(side=tk.LEFT, padx=10)
+
+page_limit_check = tk.BooleanVar()
+page_limit_spinbox = tk.Spinbox(frame, from_=1, to=100, width=5, value=2)
+
+page_limit_checkbox = tk.Checkbutton(frame, text="ページ制限を設定", variable=page_limit_check)
+page_limit_checkbox.pack(side=tk.LEFT, padx=10)
+
+page_limit_label = tk.Label(frame, text="解析するページ数:")
+page_limit_label.pack(side=tk.LEFT)
+page_limit_spinbox.pack(side=tk.LEFT, padx=10)
 
 load_button = tk.Button(frame, text="Load PDF Folder", command=load_folder)
 load_button.pack(side=tk.LEFT, padx=10)
